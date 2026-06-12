@@ -185,8 +185,12 @@ def _section(d: ImageDraw.ImageDraw, x: int, y: int, w: int, title: str,
         d.text((x + 52, y + 8), ad["merchant"][:20], font=f_name, fill=WHITE)
         meta1 = f"Límite: {fmt_bs(ad['min'])} – {fmt_bs(ad['max'])} Bs"
         meta2 = f"Disp: {fmt_usdt(ad['available'])} USDT · {ad['orders']} órd. · {ad['completion']}%"
+        banks = " · ".join(ad["methods"][:3]) if ad["methods"] else "—"
+        if len(ad["methods"]) > 3:
+            banks += f" (+{len(ad['methods']) - 3})"
         d.text((x + 52, y + 36), meta1, font=f_meta, fill=GRAY)
         d.text((x + 52, y + 56), meta2, font=f_meta, fill=GRAY)
+        d.text((x + 52, y + 76), banks[:80], font=f_meta, fill=ACCENT)
         p = f"{fmt_price(ad['price'])} Bs"
         d.text((x + w - 18 - d.textlength(p, font=f_price), y + 22), p, font=f_price, fill=color)
         y += row_h
@@ -195,7 +199,7 @@ def _section(d: ImageDraw.ImageDraw, x: int, y: int, w: int, title: str,
  
 def render_image(buy_ads: list[dict], sell_ads: list[dict]) -> bytes:
     W = 980
-    header_h, row_h, gap, footer_h = 150, 80, 26, 56
+    header_h, row_h, gap, footer_h = 150, 102, 26, 56
     n = max(len(buy_ads), 1)
     m = max(len(sell_ads), 1)
     H = header_h + (52 + n * row_h) + gap + (52 + m * row_h) + footer_h
