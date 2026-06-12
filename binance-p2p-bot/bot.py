@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """
-Binance P2P → Telegram Bot
-Cada N minutos consulta el precio de compra de USDT con Bolívares (VES)
-en Binance P2P, genera una imagen tipo tarjeta y la envía a un canal/grupo.
-
+Binance P2P (Comercio por Bloques) → Telegram Bot
+Consulta los anuncios de COMPRA y VENTA de USDT/VES en el mercado de bloques
+de Binance P2P (solo comerciantes verificados), genera una imagen con la
+seguidilla de los primeros anuncios (precio, límites y disponibilidad)
+y la envía a un canal/grupo de Telegram.
+ 
 Variables de entorno requeridas:
   TELEGRAM_BOT_TOKEN  -> token de @BotFather
   TELEGRAM_CHAT_ID    -> ID del canal/grupo (ej: -1001234567890) o @nombre_canal
-
+ 
 Opcionales:
-  INTERVAL_MINUTES    -> intervalo de envío (default: 10)
-  ROWS                -> cantidad de anuncios a mostrar (default: 5)
-  TRADE_TYPE          -> BUY (comprar USDT) o SELL (vender USDT). Default: BUY
-  PAY_TYPES           -> métodos de pago separados por coma, ej: "PagoMovil,Banesco" (default: todos)
+  INTERVAL_MINUTES    -> intervalo en modo loop (default: 10)
+  ROWS                -> anuncios por lado (default: 5)
+  CLASSIFIES          -> mercado: "block" = comercio por bloques (default),
+                         "mass,profession" = P2P normal
+  PUBLISHER_TYPE      -> "merchant" = solo verificados (default), vacío = todos
+  PAY_TYPES           -> métodos de pago separados por coma (default: todos)
 """
-
+ 
 import io
 import os
 import sys
@@ -22,36 +26,42 @@ import time
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
-
+ 
 import requests
 from PIL import Image, ImageDraw, ImageFont
-
+ 
 # ---------------- Configuración ----------------
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 INTERVAL_MINUTES = int(os.environ.get("INTERVAL_MINUTES", "10"))
 ROWS = int(os.environ.get("ROWS", "5"))
-TRADE_TYPE = os.environ.get("TRADE_TYPE", "BUY").upper()  # BUY = comprar USDT
+CLASSIFIES = [c.strip() for c in os.environ.get("CLASSIFIES", "block").split(",") if c.strip()]
+PUBLISHER_TYPE = os.environ.get("PUBLISHER_TYPE", "merchant").strip() or None
 PAY_TYPES = [p.strip() for p in os.environ.get("PAY_TYPES", "").split(",") if p.strip()]
-
+MAX_DEV_PCT = float(os.environ.get("MAX_DEV_PCT", "3.0"))  # % máx. de desviación vs mediana
+ 
 P2P_URL = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 TZ = ZoneInfo("America/Caracas")
-
+ 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("p2p-bot")
-
-
+ 
+ 
 # ---------------- Binance P2P ----------------
-def fetch_p2p_ads() -> list[dict]:
+def fetch_ads(trade_type: str, classifies: list[str]) -> list[dict]:
     """Consulta la API pública de Binance P2P y devuelve los anuncios."""
     payload = {
         "asset": "USDT",
         "fiat": "VES",
-        "tradeType": TRADE_TYPE,
+        "tradeType": trade_type,
         "page": 1,
-        "rows": ROWS,
+        "rows": ROWS + 5,  # extra para poder descartar promocionados/outliers
         "payTypes": PAY_TYPES,
-        "publisherType": None,
+        "countries": [],
+        "publisherType": PUBLISHER_TYPE,
+        "classifies": classifies,
+        "proMerchantAds": False,
+        "shieldMerchantAds": False,
     }
     headers = {
         "Content-Type": "application/json",
@@ -63,7 +73,7 @@ def fetch_p2p_ads() -> list[dict]:
     r = requests.post(P2P_URL, json=payload, headers=headers, timeout=20)
     r.raise_for_status()
     data = r.json().get("data") or []
-
+ 
     ads = []
     for item in data:
         adv = item.get("adv", {})
@@ -82,77 +92,143 @@ def fetch_p2p_ads() -> list[dict]:
             }
         )
     return ads
-
-
+ 
+ 
+def filter_promoted(ads: list[dict]) -> list[dict]:
+    """Descarta anuncios promocionados/outliers: precios que se desvían
+    más de MAX_DEV_PCT% de la mediana del grupo."""
+    if len(ads) < 3:
+        return ads[:ROWS]
+    prices = sorted(a["price"] for a in ads)
+    median = prices[len(prices) // 2]
+    kept = [a for a in ads if abs(a["price"] - median) / median * 100 <= MAX_DEV_PCT]
+    dropped = len(ads) - len(kept)
+    if dropped:
+        log.info("Descartados %d anuncios fuera de mercado (mediana %.2f).", dropped, median)
+    return kept[:ROWS]
+ 
+ 
+def fetch_side(trade_type: str) -> list[dict]:
+    """Intenta el mercado configurado; si 'block' no devuelve nada, cae al P2P normal."""
+    ads = fetch_ads(trade_type, CLASSIFIES)
+    if not ads and CLASSIFIES == ["block"]:
+        log.warning("Sin anuncios en 'block' para %s; usando mercado normal.", trade_type)
+        ads = fetch_ads(trade_type, ["mass", "profession"])
+    return filter_promoted(ads)
+ 
+ 
+# ---------------- Helpers ----------------
+def fmt_bs(v: float) -> str:
+    """Formatea montos en Bs de forma compacta: 36,45M / 500K / 797,00"""
+    if v >= 1_000_000:
+        return f"{v/1_000_000:,.2f}M".replace(",", "X").replace(".", ",").replace("X", ".")
+    if v >= 1_000:
+        return f"{v/1_000:,.0f}K".replace(",", ".")
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+ 
+ 
+def fmt_usdt(v: float) -> str:
+    return f"{v:,.0f}".replace(",", ".")
+ 
+ 
+def fmt_price(v: float) -> str:
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+ 
+ 
 # ---------------- Imagen ----------------
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    candidates = (
-        ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+    path = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         if bold
-        else ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     )
-    for path in candidates:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
+    if os.path.exists(path):
+        return ImageFont.truetype(path, size)
     return ImageFont.load_default()
-
-
-def render_image(ads: list[dict]) -> bytes:
-    """Genera una tarjeta PNG con los precios."""
-    W = 900
-    header_h, row_h, footer_h = 210, 78, 60
-    H = header_h + row_h * len(ads) + footer_h
-
-    bg, card, accent = (14, 17, 22), (24, 29, 38), (240, 185, 11)  # binance yellow
-    green, white, gray = (14, 203, 129), (234, 236, 239), (132, 142, 156)
-
-    img = Image.new("RGB", (W, H), bg)
-    d = ImageDraw.Draw(img)
-
-    now = datetime.now(TZ)
-    accion = "COMPRA" if TRADE_TYPE == "BUY" else "VENTA"
-
-    # Header
-    d.rectangle([0, 0, W, header_h - 20], fill=card)
-    d.rectangle([0, 0, W, 6], fill=accent)
-    d.text((40, 28), "BINANCE P2P", font=_font(34, True), fill=accent)
-    d.text((40, 78), f"USDT / VES  ·  {accion}", font=_font(24), fill=gray)
-
-    best = ads[0]["price"] if ads else 0
-    best_txt = f"{best:,.2f} Bs"
-    f_big = _font(54, True)
-    tw = d.textlength(best_txt, font=f_big)
-    d.text((W - 40 - tw, 40), best_txt, font=f_big, fill=green)
-    lbl = "mejor precio"
-    f_lbl = _font(20)
-    d.text((W - 40 - d.textlength(lbl, font=f_lbl), 108), lbl, font=f_lbl, fill=gray)
-
-    d.text((40, 130), now.strftime("%d/%m/%Y  %I:%M %p (VET)"), font=_font(22), fill=white)
-
-    # Filas
-    y = header_h
-    f_price, f_name, f_meta = _font(30, True), _font(24, True), _font(18)
+ 
+ 
+BG = (14, 17, 22)
+CARD = (24, 29, 38)
+ROW_ALT = (19, 23, 31)
+ACCENT = (240, 185, 11)
+GREEN = (14, 203, 129)
+RED = (246, 70, 93)
+WHITE = (234, 236, 239)
+GRAY = (132, 142, 156)
+ 
+ 
+def _section(d: ImageDraw.ImageDraw, x: int, y: int, w: int, title: str,
+             color: tuple, ads: list[dict], row_h: int) -> int:
+    """Dibuja una sección (Compra o Venta). Devuelve la Y final."""
+    d.rectangle([x, y, x + w, y + 44], fill=CARD)
+    d.rectangle([x, y, x + 6, y + 44], fill=color)
+    d.text((x + 22, y + 8), title, font=_font(24, True), fill=color)
+    if ads:
+        ref = f"{fmt_price(ads[0]['price'])} Bs"
+        f_ref = _font(24, True)
+        d.text((x + w - 22 - d.textlength(ref, font=f_ref), y + 8), ref, font=f_ref, fill=WHITE)
+    y += 52
+ 
+    f_name, f_price = _font(22, True), _font(26, True)
+    f_meta = _font(16)
+    if not ads:
+        d.text((x + 22, y + 10), "Sin anuncios disponibles", font=_font(20), fill=GRAY)
+        return y + row_h
+ 
     for i, ad in enumerate(ads):
         if i % 2 == 0:
-            d.rectangle([0, y, W, y + row_h], fill=(19, 23, 31))
-        d.text((40, y + 12), f"{i+1}", font=_font(24, True), fill=accent)
-        d.text((90, y + 8), ad["merchant"][:22], font=f_name, fill=white)
-        meta = f"{ad['orders']} órdenes · {ad['completion']}%"
-        if ad["methods"]:
-            meta += " · " + ", ".join(ad["methods"][:2])
-        d.text((90, y + 42), meta[:70], font=f_meta, fill=gray)
-        p = f"{ad['price']:,.2f} Bs"
-        d.text((W - 40 - d.textlength(p, font=f_price), y + 22), p, font=f_price, fill=green)
+            d.rectangle([x, y, x + w, y + row_h], fill=ROW_ALT)
+        d.text((x + 18, y + 10), f"{i+1}", font=_font(20, True), fill=ACCENT)
+        d.text((x + 52, y + 8), ad["merchant"][:20], font=f_name, fill=WHITE)
+        meta1 = f"Límite: {fmt_bs(ad['min'])} – {fmt_bs(ad['max'])} Bs"
+        meta2 = f"Disp: {fmt_usdt(ad['available'])} USDT · {ad['orders']} órd. · {ad['completion']}%"
+        d.text((x + 52, y + 36), meta1, font=f_meta, fill=GRAY)
+        d.text((x + 52, y + 56), meta2, font=f_meta, fill=GRAY)
+        p = f"{fmt_price(ad['price'])} Bs"
+        d.text((x + w - 18 - d.textlength(p, font=f_price), y + 22), p, font=f_price, fill=color)
         y += row_h
-
-    # Footer
-    d.text((40, y + 16), "Fuente: API pública Binance P2P · Actualización automática", font=_font(18), fill=gray)
-
+    return y
+ 
+ 
+def render_image(buy_ads: list[dict], sell_ads: list[dict]) -> bytes:
+    W = 980
+    header_h, row_h, gap, footer_h = 150, 80, 26, 56
+    n = max(len(buy_ads), 1)
+    m = max(len(sell_ads), 1)
+    H = header_h + (52 + n * row_h) + gap + (52 + m * row_h) + footer_h
+ 
+    img = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(img)
+    now = datetime.now(TZ)
+ 
+    # Header
+    d.rectangle([0, 0, W, header_h - 24], fill=CARD)
+    d.rectangle([0, 0, W, 6], fill=ACCENT)
+    d.text((40, 24), "BINANCE P2P · BLOQUES", font=_font(32, True), fill=ACCENT)
+    d.text((40, 72), "USDT / VES · Comerciantes verificados", font=_font(20), fill=GRAY)
+ 
+    # Spread
+    if buy_ads and sell_ads:
+        spread = buy_ads[0]["price"] - sell_ads[0]["price"]
+        s_txt = f"Spread: {fmt_price(spread)} Bs"
+        f_s = _font(20, True)
+        d.text((W - 40 - d.textlength(s_txt, font=f_s), 28), s_txt, font=f_s, fill=WHITE)
+    t_txt = now.strftime("%d/%m/%Y %I:%M %p (VET)")
+    f_t = _font(18)
+    d.text((W - 40 - d.textlength(t_txt, font=f_t), 60), t_txt, font=f_t, fill=GRAY)
+ 
+    y = header_h
+    y = _section(d, 0, y, W, "COMPRA  (tú compras USDT)", GREEN, buy_ads, row_h)
+    y += gap
+    y = _section(d, 0, y, W, "VENTA  (tú vendes USDT)", RED, sell_ads, row_h)
+ 
+    d.text((40, y + 14), "Fuente: API pública Binance P2P · Comercio por bloques", font=_font(16), fill=GRAY)
+ 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
-
-
+ 
+ 
 # ---------------- Telegram ----------------
 def send_photo(photo: bytes, caption: str) -> None:
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
@@ -163,45 +239,50 @@ def send_photo(photo: bytes, caption: str) -> None:
         timeout=30,
     )
     r.raise_for_status()
-
-
-def build_caption(ads: list[dict]) -> str:
+ 
+ 
+def build_caption(buy_ads: list[dict], sell_ads: list[dict]) -> str:
     now = datetime.now(TZ).strftime("%d/%m/%Y %I:%M %p")
-    accion = "Compra" if TRADE_TYPE == "BUY" else "Venta"
-    if not ads:
-        return f"⚠️ Sin datos de Binance P2P · {now} (VET)"
-    return (
-        f"💵 <b>{accion} USDT/VES — Binance P2P</b>\n"
-        f"🏆 Mejor precio: <b>{ads[0]['price']:,.2f} Bs</b>\n"
-        f"🕐 {now} (VET)"
-    )
-
-
+    lines = ["💵 <b>USDT/VES — Binance P2P (Bloques)</b>"]
+    if buy_ads:
+        lines.append(f"🟢 Compra: <b>{fmt_price(buy_ads[0]['price'])} Bs</b>")
+    if sell_ads:
+        lines.append(f"🔴 Venta: <b>{fmt_price(sell_ads[0]['price'])} Bs</b>")
+    lines.append(f"🕐 {now} (VET)")
+    return "\n".join(lines)
+ 
+ 
 # ---------------- Loop principal ----------------
 def run_once() -> None:
-    ads = fetch_p2p_ads()
-    if not ads:
-        log.warning("La API no devolvió anuncios.")
+    buy_ads = fetch_side("BUY")
+    sell_ads = fetch_side("SELL")
+    if not buy_ads and not sell_ads:
+        log.warning("La API no devolvió anuncios en ningún lado.")
         return
-    photo = render_image(ads)
-    send_photo(photo, build_caption(ads))
-    log.info("Enviado. Mejor precio: %.2f Bs", ads[0]["price"])
-
-
+    photo = render_image(buy_ads, sell_ads)
+    send_photo(photo, build_caption(buy_ads, sell_ads))
+    log.info(
+        "Enviado. Compra: %s · Venta: %s",
+        buy_ads[0]["price"] if buy_ads else "—",
+        sell_ads[0]["price"] if sell_ads else "—",
+    )
+ 
+ 
 def main() -> None:
     if not BOT_TOKEN or not CHAT_ID:
         sys.exit("ERROR: define TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID como variables de entorno.")
-    if "--once" in sys.argv:  # modo cron (GitHub Actions, crontab, etc.)
+    if "--once" in sys.argv:  # modo cron (cron-job.org / GitHub Actions)
         run_once()
         return
-    log.info("Bot iniciado. Intervalo: %d min · TradeType: %s", INTERVAL_MINUTES, TRADE_TYPE)
+    log.info("Bot iniciado. Intervalo: %d min", INTERVAL_MINUTES)
     while True:
         try:
             run_once()
         except Exception:
             log.exception("Error en el ciclo; reintento en el próximo intervalo.")
         time.sleep(INTERVAL_MINUTES * 60)
-
-
+ 
+ 
 if __name__ == "__main__":
     main()
+ 
