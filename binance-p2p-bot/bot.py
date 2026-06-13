@@ -41,6 +41,8 @@ PUBLISHER_TYPE = os.environ.get("PUBLISHER_TYPE", "merchant").strip() or None
 PAY_TYPES = [p.strip() for p in os.environ.get("PAY_TYPES", "").split(",") if p.strip()]
 MAX_DEV_PCT = float(os.environ.get("MAX_DEV_PCT", "3.0"))  # % máx. de desviación vs mediana
 HISTORY_FILE = os.environ.get("HISTORY_FILE", "data/history.csv")
+QUIET_START = os.environ.get("QUIET_START", "00:00")  # inicio del silencio (hora VET)
+QUIET_END = os.environ.get("QUIET_END", "07:10")      # fin del silencio (hora VET)
  
 P2P_URL = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 TZ = ZoneInfo("America/Caracas")
@@ -283,8 +285,26 @@ def save_history(buy_ads: list[dict], sell_ads: list[dict]) -> None:
         log.exception("No se pudo guardar el historial (no es crítico).")
  
  
+def in_quiet_hours() -> bool:
+    """True si la hora actual (VET) está dentro del horario silencioso."""
+    try:
+        s = datetime.strptime(QUIET_START, "%H:%M").time()
+        e = datetime.strptime(QUIET_END, "%H:%M").time()
+    except ValueError:
+        return False
+    if s == e:  # mismo valor = silencio desactivado
+        return False
+    t = datetime.now(TZ).time()
+    if s <= e:
+        return s <= t < e
+    return t >= s or t < e  # rango que cruza medianoche
+ 
+ 
 # ---------------- Loop principal ----------------
 def run_once() -> None:
+    if in_quiet_hours():
+        log.info("Horario silencioso (%s–%s VET); no se envía.", QUIET_START, QUIET_END)
+        return
     buy_ads = fetch_side("BUY")
     sell_ads = fetch_side("SELL")
     if not buy_ads and not sell_ads:
