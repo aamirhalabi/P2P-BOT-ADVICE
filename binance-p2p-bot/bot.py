@@ -40,6 +40,7 @@ CLASSIFIES_SELL = [c.strip() for c in os.environ.get("CLASSIFIES_SELL", "mass,pr
 PUBLISHER_TYPE = os.environ.get("PUBLISHER_TYPE", "merchant").strip() or None
 PAY_TYPES = [p.strip() for p in os.environ.get("PAY_TYPES", "").split(",") if p.strip()]
 MAX_DEV_PCT = float(os.environ.get("MAX_DEV_PCT", "3.0"))  # % máx. de desviación vs mediana
+HISTORY_FILE = os.environ.get("HISTORY_FILE", "data/history.csv")
  
 P2P_URL = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
 TZ = ZoneInfo("America/Caracas")
@@ -259,6 +260,29 @@ def build_caption(buy_ads: list[dict], sell_ads: list[dict]) -> str:
     return "\n".join(lines)
  
  
+# ---------------- Historial ----------------
+def save_history(buy_ads: list[dict], sell_ads: list[dict]) -> None:
+    """Guarda un snapshot en CSV para el resumen diario."""
+    try:
+        os.makedirs(os.path.dirname(HISTORY_FILE) or ".", exist_ok=True)
+        new_file = not os.path.exists(HISTORY_FILE)
+        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+            if new_file:
+                f.write("timestamp,buy,sell,spread,liq_buy,liq_sell,banks\n")
+            now = datetime.now(TZ).isoformat(timespec="seconds")
+            buy = buy_ads[0]["price"] if buy_ads else ""
+            sell = sell_ads[0]["price"] if sell_ads else ""
+            spread = (buy - sell) if (buy_ads and sell_ads) else ""
+            liq_buy = round(sum(a["available"] for a in buy_ads)) if buy_ads else ""
+            liq_sell = round(sum(a["available"] for a in sell_ads)) if sell_ads else ""
+            banks = "|".join(
+                m for a in (buy_ads + sell_ads) for m in a["methods"]
+            ).replace(",", " ")
+            f.write(f"{now},{buy},{sell},{spread},{liq_buy},{liq_sell},{banks}\n")
+    except Exception:
+        log.exception("No se pudo guardar el historial (no es crítico).")
+ 
+ 
 # ---------------- Loop principal ----------------
 def run_once() -> None:
     buy_ads = fetch_side("BUY")
@@ -266,6 +290,7 @@ def run_once() -> None:
     if not buy_ads and not sell_ads:
         log.warning("La API no devolvió anuncios en ningún lado.")
         return
+    save_history(buy_ads, sell_ads)
     photo = render_image(buy_ads, sell_ads)
     send_photo(photo, build_caption(buy_ads, sell_ads))
     log.info(
