@@ -35,7 +35,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 INTERVAL_MINUTES = int(os.environ.get("INTERVAL_MINUTES", "10"))
 ROWS = int(os.environ.get("ROWS", "5"))
-CLASSIFIES_BUY = [c.strip() for c in os.environ.get("CLASSIFIES_BUY", "block").split(",") if c.strip()]
+CLASSIFIES_BUY = [c.strip() for c in os.environ.get("CLASSIFIES_BUY", "mass,profession").split(",") if c.strip()]
 CLASSIFIES_SELL = [c.strip() for c in os.environ.get("CLASSIFIES_SELL", "mass,profession").split(",") if c.strip()]
 PUBLISHER_TYPE = os.environ.get("PUBLISHER_TYPE", "merchant").strip() or None
 PAY_TYPES = [p.strip() for p in os.environ.get("PAY_TYPES", "").split(",") if p.strip()]
@@ -225,11 +225,11 @@ def render_image(buy_ads: list[dict], sell_ads: list[dict]) -> bytes:
     d.text((W - 40 - d.textlength(t_txt, font=f_t), 60), t_txt, font=f_t, fill=GRAY)
  
     y = header_h
-    y = _section(d, 0, y, W, "COMPRA · Bloques  (tú compras USDT)", GREEN, buy_ads, row_h)
+    y = _section(d, 0, y, W, "COMPRA  (tú compras USDT)", GREEN, buy_ads, row_h)
     y += gap
-    y = _section(d, 0, y, W, "VENTA · P2P  (tú vendes USDT)", RED, sell_ads, row_h)
+    y = _section(d, 0, y, W, "VENTA  (tú vendes USDT)", RED, sell_ads, row_h)
  
-    d.text((40, y + 14), "Fuente: API pública Binance P2P · Compra: bloques / Venta: P2P", font=_font(16), fill=GRAY)
+    d.text((40, y + 14), "Fuente: API pública Binance P2P", font=_font(16), fill=GRAY)
  
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -252,9 +252,9 @@ def build_caption(buy_ads: list[dict], sell_ads: list[dict]) -> str:
     now = datetime.now(TZ).strftime("%d/%m/%Y %I:%M %p")
     lines = ["💵 <b>USDT/VES — Binance P2P</b>"]
     if buy_ads:
-        lines.append(f"🟢 Compra (Bloques): <b>{fmt_price(buy_ads[0]['price'])} Bs</b>")
+        lines.append(f"🟢 Compra: <b>{fmt_price(buy_ads[0]['price'])} Bs</b>")
     if sell_ads:
-        lines.append(f"🔴 Venta (P2P): <b>{fmt_price(sell_ads[0]['price'])} Bs</b>")
+        lines.append(f"🔴 Venta: <b>{fmt_price(sell_ads[0]['price'])} Bs</b>")
     lines.append(f"🕐 {now} (VET)")
     return "\n".join(lines)
  
