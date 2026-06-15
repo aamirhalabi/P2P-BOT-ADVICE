@@ -563,3 +563,4 @@ timestamp,buy,sell,spread,liq_buy,liq_sell,banks
 2026-06-15T17:25:21-04:00,800.0,806.0,-6.0,4047,388282,Provincial|Provincial|BBVA|Provincial|Banesco|Banco de Venezuela|BNC Banco Nacional de Crédito|Bancamiga|Bancamiga|Bancamiga|Banco de Venezuela|Bank Transfer
 2026-06-15T17:30:24-04:00,800.0,806.0,-6.0,5597,374692,Bank Transfer|Provincial|BBVA|Mercantil|Mercantil|Mercantil|BNC Banco Nacional de Crédito|Bancamiga|Bancamiga|Bancamiga|Banco de Venezuela|Bank Transfer
 2026-06-15T17:35:21-04:00,800.0,806.0,-6.0,5965,348516,Banesco|Provincial|BBVA|Mercantil|Mercantil|Mercantil|BNC Banco Nacional de Crédito|Bancamiga|Bancamiga|Bancamiga|Banco de Venezuela|Bank Transfer
+2026-06-15T17:41:39-04:00,801.0,806.0,-5.0,4490,253762,Banesco|Mercantil|Banesco|Mercantil|Banesco|BNC Banco Nacional de Crédito|Bancamiga|Bancamiga|Bancamiga|Banco de Venezuela|Bank Transfer
