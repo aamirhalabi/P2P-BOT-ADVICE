@@ -1539,3 +1539,4 @@ timestamp,buy,sell,spread,liq_buy,liq_sell,banks
 2026-06-20T14:35:13-04:00,803.999,807.0,-3.0009999999999764,2227,179290,Mercantil|Mercantil|Mercantil|Banesco|Banesco|Banco Digital de los Trabajadores|Banesco|Banesco|Banesco|Banesco
 2026-06-20T14:40:15-04:00,804.0,807.0,-3.0,2277,196679,Mercantil|Banesco|Mercantil|Mercantil|Banesco|Banco Digital de los Trabajadores|Banesco|Banesco|Banesco|Banesco
 2026-06-20T14:45:14-04:00,804.199,807.0,-2.8010000000000446,4918,173985,Mercantil|Mercantil|Banesco|Mercantil|Mercantil|Banco Digital de los Trabajadores|Banesco|Banesco|Banesco|Banesco
+2026-06-20T14:50:18-04:00,802.0,807.0,-5.0,2515,170518,Bank Transfer|Mercantil|Mercantil|Banesco|Mercantil|Banco Digital de los Trabajadores|Banesco|Banesco|Banesco|Banesco
