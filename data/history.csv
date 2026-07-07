@@ -4279,3 +4279,4 @@ timestamp,buy,sell,spread,liq_buy,liq_sell,banks
 2026-07-07T11:20:35-04:00,767.999,767.0,0.9990000000000236,13287,225477,Mercantil|Mercantil|Mercantil|Mercantil|Mercantil|Mercantil|Banesco|Banesco|Banesco|Banesco
 2026-07-07T11:30:40-04:00,767.0,766.25,0.75,23055,84389,Banesco|Banesco|Banesco|Banesco|Banesco|Mercantil|Banesco|Banesco|Banesco|Banesco
 2026-07-07T11:40:37-04:00,766.0,767.0,-1.0,30044,141808,Bank Transfer|Bank Transfer|Banco de Venezuela|Bank Transfer|Banco de Venezuela|Bank Transfer|Banco de Venezuela|Bank Transfer|Banco de Venezuela|Banesco|Banesco|Banesco|Banesco|Mercantil
+2026-07-07T11:50:33-04:00,766.69,766.71,-0.01999999999998181,6485,162063,Mercantil|Mercantil|Mercantil|Mercantil|Mercantil|Banesco|Banesco|Banesco|Banesco|Banesco
