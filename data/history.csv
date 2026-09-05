@@ -10262,3 +10262,4 @@ timestamp,buy,sell,spread,liq_buy,liq_sell,banks
 2026-09-05T08:10:15-04:00,965.001,965.7,-0.6990000000000691,215471,68833,Bank Transfer|Banco de Venezuela|Banesco|Banesco|Banesco|Banesco|Provincial|BBVA|Provincial|BBVA|Provincial|BBVA|BBVA|Provincial|BBVA|Provincial
 2026-09-05T08:20:19-04:00,965.001,967.0,-1.9990000000000236,199401,72356,Bank Transfer|Banco de Venezuela|Banesco|Banesco|Banesco|Banesco|Banco Digital de los Trabajadores|Provincial|BBVA|Provincial|BBVA|Provincial|BBVA|Banco del Tesoro
 2026-09-05T08:30:18-04:00,965.001,967.0,-1.9990000000000236,153463,63945,Bank Transfer|Banco de Venezuela|Banesco|Banesco|Banesco|Banesco|Banco Digital de los Trabajadores|Banco del Tesoro|BBVA|Provincial|Provincial|BBVA|Mercantil
+2026-09-05T08:40:26-04:00,966.4,967.0,-0.6000000000000227,19400,99435,Mercantil|Banesco|Banesco|Banesco|Banesco|Banesco|Banco Digital de los Trabajadores|Banco del Tesoro|Provincial|BBVA|Mercantil|Banco de Venezuela|Bank Transfer
