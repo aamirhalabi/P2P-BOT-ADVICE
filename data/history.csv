@@ -16031,3 +16031,4 @@ timestamp,buy,sell,spread,liq_buy,liq_sell,banks
 2026-11-01T13:30:19-04:00,991.0,990.2,0.7999999999999545,32340,90767,Banesco|Mercantil|Banesco|Banesco|Bank Transfer|Banco de Venezuela|Provincial|Provincial|BBVA|Provincial|Banesco|Banesco
 2026-11-01T13:40:15-04:00,985.18,989.1,-3.9200000000000728,30398,38848,Bancamiga|Mercantil|Banesco|Banesco|Banco de Venezuela|Banco de Venezuela|Bank Transfer|Provincial|Provincial|BBVA|Banesco|Mercantil|Mercantil
 2026-11-01T13:50:15-04:00,985.18,990.2,-5.0200000000000955,21895,41431,Bancamiga|Banco de Venezuela|Bank Transfer|Banco de Venezuela|Bank Transfer|Banco de Venezuela|Mercantil|Provincial|Provincial|Provincial|BBVA|Mercantil|Mercantil
+2026-11-01T14:00:19-04:00,985.0,989.0,-4.0,14673,44519,Provincial|Mercantil|Bancamiga|Banesco|Banco Plaza|Banesco|Bank Transfer|Banco de Venezuela|Bancamiga|Banesco|Mercantil|Provincial|Mercantil|Provincial|BBVA
