@@ -240,17 +240,37 @@ def render_image(buy_ads: list[dict], sell_ads: list[dict]) -> bytes:
  
  
 # ---------------- Telegram ----------------
-def send_photo(photo: bytes, caption: str) -> None:
+def send_photo(photo: bytes, caption: str, attempts: int = 4) -> None:
+    """Envía la imagen a Telegram con reintentos y backoff ante caídas
+    temporales (5xx, 429, timeouts, errores de conexión)."""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    r = requests.post(
-        url,
-        data={"chat_id": CHAT_ID, "caption": caption, "parse_mode": "HTML"},
-        files={"photo": ("p2p.png", photo, "image/png")},
-        timeout=30,
-    )
-    r.raise_for_status()
- 
- 
+    for i in range(1, attempts + 1):
+        wait = 5 * i
+        try:
+            r = requests.post(
+                url,
+                data={"chat_id": CHAT_ID, "caption": caption, "parse_mode": "HTML"},
+                files={"photo": ("p2p.png", photo, "image/png")},
+                timeout=(10, 60),
+            )
+            if r.status_code < 400:
+                return
+            if r.status_code != 429 and r.status_code < 500:
+                r.raise_for_status()  # 4xx (token/chat inválido): no reintentar
+            if r.status_code == 429:
+                try:
+                    wait = int(r.json().get("parameters", {}).get("retry_after", wait))
+                except ValueError:
+                    pass
+            err = f"HTTP {r.status_code}"
+        except (requests.ConnectionError, requests.Timeout) as e:
+            err = str(e)
+        if i == attempts:
+            raise RuntimeError(f"Telegram no respondió tras {attempts} intentos: {err}")
+        log.warning("Telegram falló (%s). Reintento %d/%d en %ds.", err, i, attempts - 1, wait)
+        time.sleep(wait)
+
+
 def build_caption(buy_ads: list[dict], sell_ads: list[dict]) -> str:
     now = datetime.now(TZ).strftime("%d/%m/%Y %I:%M %p")
     lines = ["💵 <b>USDT/VES — Binance P2P</b>"]
